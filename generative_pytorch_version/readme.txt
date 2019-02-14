@@ -31,13 +31,3 @@ test model with the following commands.
 actually, you can run the script run_train.sh/run_test.sh training/testing model directly
 
 
-
-
-
-
-
-
-# Train
-python run_knowledge.py --gpu 0
-# Test
-python run_knowledge.py --test --ckpt PATH_TO_MODEL/best.model --gen_file test.result --use_posterior False

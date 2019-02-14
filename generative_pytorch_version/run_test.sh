@@ -8,7 +8,6 @@
 #
 ######################################################################
 
-#pythonpath='/opt/compiler/gcc-4.8.2/lib/ld-linux-x86-64.so.2 --library-path /opt/compiler/gcc-4.8.2/lib /home/talk2/xuxinchao01/knowledge_tagging/krl-p40-local/pytorch1/bin/python'
 pythonpath='python'
 prefix=demo
 testfile=test.txt

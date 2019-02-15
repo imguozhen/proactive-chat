@@ -121,7 +121,7 @@ for line in open(test_file):
             cand_len = len(cand_response.strip().split(" ")) + 1
             hits_item.append((is_golden, score/cand_len))
         else:
-            hits_item.append((is_golden, score/cand_len))
+            hits_item.append((is_golden, score))
     sorted_hits_item = sorted(hits_item, key = lambda d: d[1], reverse = True)
     hits_data.append(sorted_hits_item)
 

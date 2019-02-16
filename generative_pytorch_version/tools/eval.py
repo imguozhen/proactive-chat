@@ -9,81 +9,100 @@
 #
 ######################################################################
 
+ 
 import sys
-import json
 import math
-from collections import OrderedDict
 
-if len(sys.argv) < 3:
-    strUsage = "Usage: " + sys.argv[0] + " test_file model_type[rank|gen]\n"
-    strUsage += "\trank: ranking model\n"
-    strUsage += "\tgen: generative model\n"
-    sys.stderr.write(strUsage)
+if len(sys.argv) < 2:
+    print("Usage: " + sys.argv[0] + " eval_file")
+    print("eval file format: pred_response \t gold_response")
     exit()
 
-def error_check(item, model_type):
-    if item.get("candidate") is None:
-        sys.stderr.write("Format Error: no candidate item in data!\n")
-        return False
-    if len(item["candidate"]) != 10:
-        sys.stderr.write("Format Error: candidate number is error!\n")
-        return False
-    golden_number = 0
-    for cand in item["candidate"]:
-        if len(cand) != 3:
-            sys.stderr.write("Format Error: candidate format is error!\n")
-            return False
-        is_golden = cand[1]
-        if is_golden != 0 and is_golden != 1:
-            sys.stderr.write("Data Error: no golden information in data!\n")
-            return False
-        if is_golden == 1:
-            golden_number += 1
-    if golden_number != 1:
-        sys.stderr.write("Data Error: golden response number is error!\n")
-        return False
-    if item.get("response") is None and model_type == "gen":
-        sys.stderr.write("Format Error: no response item in data!\n")
-        return False
-    return True 
+def get_dict(tokens, ngram, gdict = None):
+    token_dict = {}
+    if gdict is not None:
+        token_dict = gdict
+    tlen = len(tokens)
+    for i in range(0, tlen - ngram + 1):
+        ngram_token = "".join(tokens[i:(i+ngram)])
+        if token_dict.get(ngram_token) != None: 
+           token_dict[ngram_token] += 1
+        else:
+           token_dict[ngram_token] = 1
+    return token_dict
 
+def count(pred_tokens, gold_tokens, ngram, result):
+    cover_count, total_count = result
+    pred_dict = get_dict(pred_tokens, ngram)
+    gold_dict = get_dict(gold_tokens, ngram)
+    cur_cover_count = 0
+    cur_total_count = 0
+    for token, freq in pred_dict.items():
+        if gold_dict.get(token) != None:
+             gold_freq = gold_dict[token]
+             cur_cover_count += min(freq, gold_freq)
+        cur_total_count += freq
+    result[0] += cur_cover_count
+    result[1] += cur_total_count
+def calc_bp(pair_list):
+    c_count = 0.0
+    r_count = 0.0
+    for pair in pair_list:
+        pred_tokens, gold_tokens = pair
+        c_count += len(pred_tokens)
+        r_count += len(gold_tokens)
+    bp = 1
+    if c_count < r_count:
+        bp = math.exp(1 - r_count/c_count)
+    return bp 
+def calc_cover_rate(pair_list, ngram):
+    result = [0.0, 0.0] # [cover_count, total_count]
+    for pair in pair_list:
+        pred_tokens, gold_tokens = pair
+        count(pred_tokens, gold_tokens, ngram, result)
+    cover_rate = result[0]/result[1]
+    return cover_rate 
 
-def eval_hits(data):
-    total = len(data)
-    if total == 0:
-        return [0, 0]
-    hits_1 = 0.0
-    hits_3 = 0.0
-    for item in data:
-        if item[0][0] == 1:
-            hits_1 += 1
-            hits_3 += 1
-        if item[1][0] == 1:
-            hits_3 += 1
-        if item[2][0] == 1:
-            hits_3 += 1
-    return [hits_1/total, hits_3/total] 
-
-    
-def eval_ppl(data):
-    total_words = 0.0
-    total_score = 0.0
-    for golden_response, score in data:
-        num = len(golden_response.strip().split(" ")) + 1
-        total_words += num
-        total_score += score
-    if total_words == 0:
-        return 0
-    return math.exp(-total_score/total_words)
-
-
-def eval_f1(data):
+def calc_bleu(pair_list):
+    bp = calc_bp(pair_list)
+    cover_rate1 = calc_cover_rate(pair_list, 1)
+    cover_rate2 = calc_cover_rate(pair_list, 2)
+    cover_rate3 = calc_cover_rate(pair_list, 3)
+    bleu1 = 0
+    bleu2 = 0
+    bleu3 = 0
+    if cover_rate1 > 0:
+        bleu1 = bp * math.exp(math.log(cover_rate1))
+    if cover_rate2 > 0:
+        bleu2 = bp * math.exp((math.log(cover_rate1) + math.log(cover_rate2))/2)
+    if cover_rate3 > 0:
+        bleu3 = bp * math.exp((math.log(cover_rate1) + math.log(cover_rate2) + math.log(cover_rate3))/3)
+    return [bleu1, bleu2]
+def calc_distinct_ngram(pair_list, ngram):
+    ngram_total = 0.0
+    ngram_distinct_count = 0.0
+    pred_dict = {}
+    for predict_tokens, _ in pair_list:
+        get_dict(predict_tokens, ngram, pred_dict)
+    for key, freq in pred_dict.items():
+        ngram_total += freq
+        ngram_distinct_count += 1 
+        #if freq == 1:
+        #    ngram_distinct_count += freq
+    return ngram_distinct_count/ngram_total
+def calc_distinct(pair_list):
+    distinct1 = calc_distinct_ngram(pair_list, 1)
+    distinct2 = calc_distinct_ngram(pair_list, 2)
+    return [distinct1, distinct2]
+def calc_f1(data):
     golden_char_total = 0.0
     pred_char_total = 0.0
     hit_char_total = 0.0
-    for golden_response, response in data:
-        golden_response = golden_response.replace(" ", "")
-        response = response.replace(" ", "")
+    for response, golden_response in data:
+        #golden_response = "".join(golden_response).decode("utf8")
+        #response = "".join(response).decode("utf8")
+        golden_response = "".join(golden_response)
+        response = "".join(response)
         for char in response:
             if char in golden_response:
                 hit_char_total += 1
@@ -95,45 +114,26 @@ def eval_f1(data):
     return f1
 
 
-hits_data = []
-ppl_data = []
-f1_data = []
 
-test_file = sys.argv[1]
-model_type = sys.argv[2]
-for line in open(test_file):
-    item = json.loads(line.strip(), object_pairs_hook=OrderedDict);  
-    if not error_check(item, model_type):
-        exit()
-    candidate_list = item["candidate"]
-    response = ""
-    if model_type == "gen": 
-        response = item["response"] 
-    golden_response = ""
-    hits_item = []
-    for cand in candidate_list:
-        cand_response, is_golden, score = cand
-        if is_golden:
-            golden_response =  cand_response
-            ppl_data.append((golden_response, score))
-            f1_data.append((golden_response, response))
-        if model_type == "gen":
-            cand_len = len(cand_response.strip().split(" ")) + 1
-            hits_item.append((is_golden, score/cand_len))
-        else:
-            hits_item.append((is_golden, score))
-    sorted_hits_item = sorted(hits_item, key = lambda d: d[1], reverse = True)
-    hits_data.append(sorted_hits_item)
+eval_file = sys.argv[1]
+sents = []
+for line in open(eval_file):
+    tk = line.strip().split("\t")
+    if len(tk) < 2:
+       continue
+    pred_tokens = tk[0].strip().split(" ")
+    gold_tokens = tk[1].strip().split(" ")
+    sents.append([pred_tokens, gold_tokens])
+# calc f1
+f1 = calc_f1(sents)
+# calc bleu
+bleu1, bleu2 = calc_bleu(sents)
+# calc distinct
+distinct1, distinct2 = calc_distinct(sents)
 
-
-    
-output_str = ""
-hits_1, hits_3 = eval_hits(hits_data)
-output_str += "hits@1: %.2f%%\n"%(hits_1*100)
-output_str += "hits@3: %.2f%%\n"%(hits_3*100)
-if model_type == "gen":
-    ppl = eval_ppl(ppl_data)
-    f1 = eval_f1(f1_data)
-    output_str += "f1: %.2f%%\n"%(f1*100)
-    output_str += "ppl: %.2f\n"%ppl
+output_str = "F1: %.2f%%\n"%(f1*100)
+output_str += "BLEU1: %.3f%%\n"%bleu1
+output_str += "BLEU2: %.3f%%\n"%bleu2
+output_str += "DISTINCT1: %.3f%%\n"%distinct1
+output_str += "DISTINCT2: %.3f%%\n"%distinct2
 sys.stdout.write(output_str)

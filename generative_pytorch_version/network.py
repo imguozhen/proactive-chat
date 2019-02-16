@@ -181,10 +181,10 @@ def main():
         metrics, scores = evaluate(model, test_iter)
         print(metrics.report_cum())
 
-        with open(config.gold_score_file, 'w') as f:
-            for s in scores:
-                f.write(str(s) + "\n")
-            f.close()
+        #with open(config.gold_score_file, 'w') as f:
+        #    for s in scores:
+        #        f.write(str(s) + "\n")
+        #    f.close()
 
         print("Generating ...")
         evaluate_generation(generator, test_iter, num_candidates=1,

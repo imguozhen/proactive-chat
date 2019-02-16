@@ -349,5 +349,6 @@ def write_results(results, results_file):
             """
             for pred, score in zip(result.preds, result.scores):
                 #f.write("Predict: {} ({:.3f})\n".format(pred, score))
-                f.write("{}\t{:.3f}\n".format(pred, score))
+                #f.write("{}\t{:.3f}\n".format(pred, score))
+                f.write("{}\n".format(pred))
             #f.write("\n")

@@ -24,7 +24,7 @@ def convert_result_for_eval(sample_file, result_file, output_file):
         sample = json.loads(sample, encoding="utf-8", \
                               object_pairs_hook=collections.OrderedDict)
         response = sample["response"]
-        fout.write(response + "\t" + result_list[i] + "\n")
+        fout.write(result_list[i] + "\t" + response + "\n")
 
     fout.close()
 
